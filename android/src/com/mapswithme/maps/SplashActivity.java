@@ -22,7 +22,6 @@ import com.mapswithme.maps.news.OnboardingStep;
 import com.mapswithme.maps.onboarding.BaseNewsFragment;
 import com.mapswithme.maps.onboarding.WelcomeDialogFragment;
 import com.mapswithme.maps.permissions.PermissionsDialogFragment;
-import com.mapswithme.maps.permissions.StoragePermissionsDialogFragment;
 import com.mapswithme.util.Config;
 import com.mapswithme.util.Counters;
 import com.mapswithme.util.PermissionsUtils;
@@ -50,7 +49,6 @@ public class SplashActivity extends AppCompatActivity
   private View mAppName;
 
   private boolean mPermissionsGranted;
-  private boolean mNeedStoragePermission;
   private boolean mCanceled;
 
   @NonNull
@@ -189,24 +187,11 @@ public class SplashActivity extends AppCompatActivity
     if (updaterFragment == null)
       return;
 
-    // If the user revoked the external storage permission while the app was killed
-    // we can't update maps automatically during recovering process, so just dismiss updater fragment
-    // and ask the user to grant the permission.
-    if (!PermissionsUtils.isExternalStorageGranted(this))
+    // Check platform and core initialization, because we may be in the recovering process,
+    // i.e. method onResume() may not be invoked in that case.
+    if (!MwmApplication.from(getApplicationContext()).arePlatformAndCoreInitialized())
     {
-      fm.beginTransaction().remove(updaterFragment).commitAllowingStateLoss();
-      fm.executePendingTransactions();
-      StoragePermissionsDialogFragment.show(this);
-    }
-    else
-    {
-      // If external permissions are still granted we just need to check platform
-      // and core initialization, because we may be in the recovering process,
-      // i.e. method onResume() may not be invoked in that case.
-      if (!MwmApplication.from(getApplicationContext()).arePlatformAndCoreInitialized())
-      {
-        init();
-      }
+      init();
     }
   }
 
@@ -266,19 +251,10 @@ public class SplashActivity extends AppCompatActivity
 
   private boolean processPermissionGranting()
   {
-    mPermissionsGranted = PermissionsUtils.isExternalStorageGranted(this);
-    DialogFragment storagePermissionsDialog = StoragePermissionsDialogFragment.find(this);
+    mPermissionsGranted = PermissionsUtils.isLocationGranted(this);
     DialogFragment permissionsDialog = PermissionsDialogFragment.find(this);
     if (!mPermissionsGranted)
     {
-      if (mNeedStoragePermission || storagePermissionsDialog != null)
-      {
-        if (permissionsDialog != null)
-          permissionsDialog.dismiss();
-        if (storagePermissionsDialog == null)
-          StoragePermissionsDialogFragment.show(this);
-        return false;
-      }
       permissionsDialog = PermissionsDialogFragment.find(this);
       if (permissionsDialog == null)
         UiThread.runLater(mPermissionsDelayedTask, DELAY);
@@ -288,9 +264,6 @@ public class SplashActivity extends AppCompatActivity
 
     if (permissionsDialog != null)
       permissionsDialog.dismiss();
-
-    if (storagePermissionsDialog != null)
-      storagePermissionsDialog.dismiss();
 
     return true;
   }
@@ -402,8 +375,7 @@ public class SplashActivity extends AppCompatActivity
       return;
 
     mPermissionsGranted = PermissionsUtils.computePermissionsResult(permissions, grantResults)
-                                          .isExternalStorageGranted();
-    mNeedStoragePermission = !mPermissionsGranted;
+                                          .isLocationGranted();
   }
 
   @Override

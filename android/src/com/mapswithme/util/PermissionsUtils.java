@@ -22,7 +22,6 @@ public final class PermissionsUtils
 {
   private static final String[] PERMISSIONS = new String[]
       {
-          WRITE_EXTERNAL_STORAGE,
           ACCESS_COARSE_LOCATION,
           ACCESS_FINE_LOCATION
       };
@@ -59,11 +58,6 @@ public final class PermissionsUtils
         || shouldShowRequestPermissionRationale(activity, ACCESS_FINE_LOCATION);
   }
 
-  public static boolean isExternalStorageGranted(@NonNull Context context)
-  {
-    return checkPermissions(context).isExternalStorageGranted();
-  }
-
   @NonNull
   private static PermissionsResult checkPermissions(@NonNull Context context)
   {
@@ -81,13 +75,11 @@ public final class PermissionsUtils
   @NonNull
   private static PermissionsResult getPermissionsResult(@NonNull Map<String, Boolean> result)
   {
-    boolean externalStorageGranted = result.containsKey(WRITE_EXTERNAL_STORAGE)
-                                     ? result.get(WRITE_EXTERNAL_STORAGE) : false;
     boolean locationGranted = (result.containsKey(ACCESS_COARSE_LOCATION)
                                ? result.get(ACCESS_COARSE_LOCATION) : false)
                               || (result.containsKey(ACCESS_FINE_LOCATION)
                                   ? result.get(ACCESS_FINE_LOCATION) : false);
-    return new PermissionsResult(externalStorageGranted, locationGranted);
+    return new PermissionsResult(locationGranted);
   }
 
   public static void requestPermissions(@NonNull Activity activity, int code)
