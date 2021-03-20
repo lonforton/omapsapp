@@ -1,6 +1,7 @@
 package com.mapswithme.maps.settings;
 
 import android.app.Activity;
+import android.app.Application;
 import android.app.ProgressDialog;
 import android.content.BroadcastReceiver;
 import android.content.ContentResolver;
@@ -8,8 +9,9 @@ import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.IntentFilter;
-import android.os.Build;
 import android.os.Environment;
+import android.text.TextUtils;
+
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
@@ -31,6 +33,7 @@ import java.io.FilenameFilter;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -90,7 +93,7 @@ public class StoragePathManager
       @Override
       public void onReceive(Context context, Intent intent)
       {
-        updateExternalStorages();
+        updateExternalStorages(mActivity.getApplication());
 
         if (mStoragesChangedListener != null)
           mStoragesChangedListener.onStorageListChanged(mItems, mCurrentStorageIndex);
@@ -98,7 +101,7 @@ public class StoragePathManager
     };
 
     mActivity.registerReceiver(mInternalReceiver, getMediaChangesIntentFilter());
-    updateExternalStorages();
+    updateExternalStorages(mActivity.getApplication());
   }
 
   private static IntentFilter getMediaChangesIntentFilter()
@@ -143,44 +146,69 @@ public class StoragePathManager
     return mCurrentStorageIndex;
   }
 
-  private void updateExternalStorages()
+  private void updateExternalStorages(Application application)
   {
-    updateExternalStorages(StorageUtils.getWritableDirRoot());
-  }
+    Set<String> paths = new LinkedHashSet<>();
 
-  private void updateExternalStorages(String writableDir)
-  {
-    Set<String> pathsFromConfig = new HashSet<>();
-
-    StorageUtils.parseStorages(pathsFromConfig);
-
-    mItems.clear();
-
-    final StorageItem currentStorage = buildStorageItem(writableDir);
-    addStorageItem(currentStorage);
-    addStorageItem(buildStorageItem(Environment.getExternalStorageDirectory().getAbsolutePath()));
-    for (String path : pathsFromConfig)
-      addStorageItem(buildStorageItem(path));
-
-    mCurrentStorageIndex = mItems.indexOf(currentStorage);
-
-    if (mCurrentStorageIndex == -1)
-    {
-      LOGGER.w(TAG, "Unrecognized current path : " + currentStorage);
-      LOGGER.w(TAG, "Parsed paths : ");
-      for (StorageItem item : mItems)
-        LOGGER.w(TAG, item.toString());
+    // Configured path.
+    final String configDir = Config.getStoragePath();
+    if (!TextUtils.isEmpty(configDir)) {
+      File path = new File(configDir);
+      try {
+        paths.add(path.getCanonicalPath());
+      } catch (IOException _) {
+        // ignore
+      }
     }
-  }
 
-  private void addStorageItem(StorageItem item)
-  {
-    if (item != null && !mItems.contains(item))
-      mItems.add(item);
+    // Current path.
+    final String currentDir = Framework.nativeGetWritableDir();
+    if (!TextUtils.isEmpty(currentDir)) {
+      File path = new File(currentDir);
+      try {
+        paths.add(path.getCanonicalPath());
+      } catch (IOException _) {
+        // ignore
+      }
+    }
+
+    // External storages (SD cards and other).
+    for (File dir: application.getExternalFilesDirs(null)) {
+      paths.add(dir.getAbsolutePath());
+    }
+
+    // Internal storage (always exists).
+    paths.add(application.getFilesDir().getAbsolutePath());
+
+    //
+    // Update internal state.
+    //
+    mItems.clear();
+    mCurrentStorageIndex = -1;
+    for (String path : paths)
+    {
+      StorageItem item = buildStorageItem(path);
+      if (item != null)
+        mItems.add(item);
+    }
+
+    if (!TextUtils.isEmpty(configDir))
+    {
+      mCurrentStorageIndex = mItems.indexOf(configDir);
+
+      if (mCurrentStorageIndex == -1)
+      {
+        LOGGER.w(TAG, "Unrecognized current path : " + configDir);
+
+        for (StorageItem item : mItems)
+          LOGGER.w(TAG, item.toString());
+      }
+    }
   }
 
   private static StorageItem buildStorageItem(String path)
   {
+    LOGGER.d(TAG, "Check storage : " + path);
     try
     {
       final File f = new File(path + "/");
@@ -227,7 +255,7 @@ public class StoragePathManager
               @Override
               public void moveFilesFinished(String newPath)
               {
-                updateExternalStorages();
+                updateExternalStorages(mActivity.getApplication());
                 if (mMoveFilesListener != null)
                   mMoveFilesListener.moveFilesFinished(newPath);
               }
@@ -235,7 +263,7 @@ public class StoragePathManager
               @Override
               public void moveFilesFailed(int errorCode)
               {
-                updateExternalStorages();
+                updateExternalStorages(mActivity.getApplication());
                 if (mMoveFilesListener != null)
                   mMoveFilesListener.moveFilesFailed(errorCode);
               }
@@ -291,18 +319,27 @@ public class StoragePathManager
             candidates[0].list().length > 0);
   }
 
-  public String findMapsMeStorage(String settingsPath)
+  public String findMapsMeStorage(@NonNull Application application)
   {
-    updateExternalStorages(settingsPath);
+    updateExternalStorages(application);
+
     List<StorageItem> items = getStorageItems();
 
     for (StorageItem item : items)
     {
+      LOGGER.d(TAG, "Scanning: " + item.mPath);
       if (containsMapData(item.mPath))
+      {
+        LOGGER.d(TAG, "Found map at: " + item.mPath);
         return item.mPath;
+      }
     }
 
-    return settingsPath;
+    // Use the first item by default.
+    final String defaultDir = items.get(0).mPath;
+    LOGGER.i(TAG, "Using default directory: " + defaultDir);
+    Config.setStoragePath(defaultDir);
+    return defaultDir;
   }
 
   private void setStoragePath(@NonNull final Activity context,
@@ -333,7 +370,7 @@ public class StoragePathManager
             else
               listener.moveFilesFailed(result);
 
-            updateExternalStorages();
+            updateExternalStorages(mActivity.getApplication());
           }
         });
       }

@@ -109,38 +109,9 @@ public class StorageUtils
   }
 
   @NonNull
-  public static String getSettingsPath()
+  public static String getPrivatePath(@NonNull Application application)
   {
-    return Environment.getExternalStorageDirectory().getAbsolutePath() + Constants.MWM_DIR_POSTFIX;
-  }
-
-  @NonNull
-  public static String getStoragePath(@NonNull String settingsPath)
-  {
-    String path = Config.getStoragePath();
-    if (!TextUtils.isEmpty(path))
-    {
-      File f = new File(path);
-      if (f.exists() && f.isDirectory())
-        return path;
-
-      path = new StoragePathManager().findMapsMeStorage(settingsPath);
-      Config.setStoragePath(path);
-      return path;
-    }
-
-    return settingsPath;
-  }
-
-  @NonNull
-  public static String getFilesPath(@NonNull Application application)
-  {
-    final File filesDir = application.getExternalFilesDir(null);
-    if (filesDir != null)
-      return filesDir.getAbsolutePath();
-
-    return Environment.getExternalStorageDirectory().getAbsolutePath() +
-           String.format(Constants.STORAGE_PATH, BuildConfig.APPLICATION_ID, Constants.FILES_DIR);
+    return application.getFilesDir().getAbsolutePath();
   }
 
   @NonNull
@@ -150,8 +121,7 @@ public class StorageUtils
     if (cacheDir != null)
       return cacheDir.getAbsolutePath();
 
-    return Environment.getExternalStorageDirectory().getAbsolutePath() +
-           String.format(Constants.STORAGE_PATH, BuildConfig.APPLICATION_ID, Constants.CACHE_DIR);
+    return application.getCacheDir().getAbsolutePath();
   }
 
   public static boolean createDirectory(@NonNull Context context, @NonNull String path)
@@ -159,13 +129,10 @@ public class StorageUtils
     File directory = new File(path);
     if (!directory.exists() && !directory.mkdirs())
     {
-      boolean isPermissionGranted = PermissionsUtils.isExternalStorageGranted(context);
       Throwable error = new IllegalStateException("Can't create directories for: " + path
-                                                  + " state = " + Environment.getExternalStorageState()
-                                                  + " isPermissionGranted = " + isPermissionGranted);
+                                                  + " state = " + Environment.getExternalStorageState());
       LOGGER.e(TAG, "Can't create directories for: " + path
-                    + " state = " + Environment.getExternalStorageState()
-                    + " isPermissionGranted = " + isPermissionGranted);
+                    + " state = " + Environment.getExternalStorageState());
       CrashlyticsUtils.INSTANCE.logException(error);
       return false;
     }
