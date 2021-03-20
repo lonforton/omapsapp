@@ -353,7 +353,6 @@ public class MwmActivity extends BaseMwmFragmentActivity
   public void onRenderingCreated()
   {
     checkMeasurementSystem();
-    checkKitkatMigrationMove();
 
     LocationHelper.INSTANCE.attach(this);
   }
@@ -387,11 +386,6 @@ public class MwmActivity extends BaseMwmFragmentActivity
   private static void checkMeasurementSystem()
   {
     UnitLocale.initializeCurrentUnits();
-  }
-
-  private void checkKitkatMigrationMove()
-  {
-    mPathManager.checkKitkatMigration(this);
   }
 
   @Override
